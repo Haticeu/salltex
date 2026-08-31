@@ -140,8 +140,9 @@
   .page-hero{padding:56px 0 40px;border-bottom:1px solid var(--line);}
   .page-hero .eyebrow{margin-bottom:10px;display:block;}
   .page-hero h1{font-size:clamp(2rem,3.6vw,2.8rem);}
-  .products-toolbar{padding:34px 0 10px;}
-  .filter-block{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-end;justify-content:space-between;margin-bottom:22px;}
+  .products-layout{display:flex;align-items:flex-start;gap:36px;padding:34px 0 10px;}
+  .filters-sidebar{width:250px;flex-shrink:0;display:flex;flex-direction:column;gap:22px;position:sticky;top:88px;}
+  .products-main{flex:1;min-width:0;}
   .filter-group{display:flex;flex-direction:column;gap:8px;}
   .filter-group .lab{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:#6b655d;font-weight:700;}
   .chip-row{display:flex;gap:8px;flex-wrap:wrap;}
@@ -152,10 +153,15 @@
   .swatch-dot{width:12px;height:12px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.15);}
   .card-swatches{display:flex;gap:5px;margin-top:2px;}
   .card-swatches .swatch-dot{width:11px;height:11px;}
-  .search-box{display:flex;align-items:center;border:1px solid var(--line);background:var(--white);padding:8px 12px;gap:8px;min-width:230px;}
-  .search-box input{border:none;outline:none;background:none;font-size:.84rem;flex:1;}
+  .search-box{display:flex;align-items:center;border:1px solid var(--line);background:var(--white);padding:8px 12px;gap:8px;}
+  .search-box input{border:none;outline:none;background:none;font-size:.84rem;flex:1;min-width:0;}
+  .filter-apply-btn{margin-top:4px;}
   .result-count{font-size:.8rem;color:#6b655d;margin-bottom:18px;}
-  .tight-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;background:var(--line);}
+  .tight-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--line);}
+  @media(max-width:900px){
+    .products-layout{flex-direction:column;gap:26px;}
+    .filters-sidebar{width:100%;position:static;}
+  }
   .tcard{background:var(--white);display:flex;flex-direction:column;}
   .tcard .media{position:relative;overflow:hidden;height:230px;cursor:pointer;background:var(--linen);}
   .tcard .media img{width:100%;height:100%;object-fit:cover;transition:transform .5s ease;}
@@ -524,8 +530,15 @@
 </section>
 <section class="view" id="view-urunler">
   <div class="page-hero"><div class="wrap"><span class="eyebrow">Colecția completă</span><h1>Produse</h1></div></div>
-  <div class="wrap products-toolbar">
-    <div class="filter-block">
+  <div class="wrap products-layout">
+    <aside class="filters-sidebar" id="filtersSidebar">
+      <div class="filter-group">
+        <span class="lab">Caută</span>
+        <div class="search-box">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="searchInput" placeholder="Nume produs...">
+        </div>
+      </div>
       <div class="filter-group">
         <span class="lab">Categorie</span>
         <div class="chip-row" id="catFilterRow"></div>
@@ -542,19 +555,13 @@
         <span class="lab">Mărime</span>
         <div class="chip-row" id="sizeFilterRow"></div>
       </div>
-      <div class="filter-group">
-        <span class="lab">Caută</span>
-        <div class="search-box">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="searchInput" placeholder="Nume produs...">
-        </div>
-      </div>
+      <button class="btn btn-primary filter-apply-btn" id="applyFiltersBtn" style="justify-content:center;">Aplică filtrele</button>
+    </aside>
+    <div class="products-main">
+      <div class="result-count" id="resultCount"></div>
+      <div class="tight-grid" id="productGrid"></div>
+      <div class="load-more" id="loadMoreWrap"><button class="btn btn-ghost dark" id="loadMoreBtn">Arată mai multe</button></div>
     </div>
-    <div class="result-count" id="resultCount"></div>
-  </div>
-  <div class="wrap">
-    <div class="tight-grid" id="productGrid"></div>
-    <div class="load-more" id="loadMoreWrap"><button class="btn btn-ghost dark" id="loadMoreBtn">Arată mai multe</button></div>
   </div>
 </section>
 <section class="view" id="view-urun">
@@ -1308,6 +1315,13 @@ let activeColor = "all";
 let activeSize = "all";
 let searchTerm = "";
 let visibleCount = 12;
+/* filtrele din sidebar sunt "puse în așteptare" pe măsură ce clienții le ating —
+   se aplică efectiv abia la apăsarea butonului „Aplică filtrele” */
+let pendingCat = "all";
+let pendingShip = "all";
+let pendingColor = "all";
+let pendingSize = "all";
+let pendingSearchTerm = "";
 let cart = [];
 let orders = [];
 let account = {loggedIn:false, name:"", email:"", phone:"", country:"RO", address:"", city:"", zip:""};
@@ -1514,22 +1528,29 @@ function renderDiscountMarquee(){
 /* ============================================================
    PRODUCTS VIEW — filtre reale, pe atributele fiecărui produs
    ============================================================ */
+function applyPendingFilters(){
+  activeCat = pendingCat;
+  activeShip = pendingShip;
+  activeColor = pendingColor;
+  activeSize = pendingSize;
+  searchTerm = pendingSearchTerm;
+  visibleCount = 12;
+  renderGrid();
+}
 function initFilterChips(){
   const catRow = document.getElementById("catFilterRow");
   const cats = [["all","Toate"],["canapele","Canapele"],["fotolii","Fotolii"],["baze","Baze de pat"],["saltele","Saltele"]];
   catRow.innerHTML = cats.map(([v,l])=>`<button class="chip ${v==='all'?'active':''}" data-cat="${v}">${l}</button>`).join("");
   catRow.querySelectorAll(".chip").forEach(c=> c.addEventListener("click", ()=>{
-    activeCat = c.dataset.cat; visibleCount = 12;
+    pendingCat = c.dataset.cat;
     catRow.querySelectorAll(".chip").forEach(x=>x.classList.toggle("active", x===c));
-    renderGrid();
   }));
   const shipRow = document.getElementById("shipFilterRow");
   const ships = [["all","Toate"],["kurye","Kurye"],["nakliye","Nakliye"],["firma_arac","Aracul Saltex"],["fabrika_teslim","Ridicare atelier"]];
   shipRow.innerHTML = ships.map(([v,l])=>`<button class="chip ${v==='all'?'active':''}" data-ship="${v}">${l}</button>`).join("");
   shipRow.querySelectorAll(".chip").forEach(c=> c.addEventListener("click", ()=>{
-    activeShip = c.dataset.ship; visibleCount = 12;
+    pendingShip = c.dataset.ship;
     shipRow.querySelectorAll(".chip").forEach(x=>x.classList.toggle("active", x===c));
-    renderGrid();
   }));
   const colorRow = document.getElementById("colorFilterRow");
   const colors = [["all","Toate"]].concat(Object.keys(COLOR_PALETTE).map(c=>[c,c]));
@@ -1538,23 +1559,23 @@ function initFilterChips(){
     : `<button class="chip swatch-chip" data-color="${v}"><span class="swatch-dot" style="background:${COLOR_PALETTE[v]}"></span>${l}</button>`
   ).join("");
   colorRow.querySelectorAll(".chip").forEach(c=> c.addEventListener("click", ()=>{
-    activeColor = c.dataset.color; visibleCount = 12;
+    pendingColor = c.dataset.color;
     colorRow.querySelectorAll(".chip").forEach(x=>x.classList.toggle("active", x===c));
-    renderGrid();
   }));
   const sizeRow = document.getElementById("sizeFilterRow");
   const sizes = [["all","Toate"]].concat(SIZE_BUCKETS.map(s=>[s,s]));
   sizeRow.innerHTML = sizes.map(([v,l])=>`<button class="chip ${v==='all'?'active':''}" data-size="${v}">${l}</button>`).join("");
   sizeRow.querySelectorAll(".chip").forEach(c=> c.addEventListener("click", ()=>{
-    activeSize = c.dataset.size; visibleCount = 12;
+    pendingSize = c.dataset.size;
     sizeRow.querySelectorAll(".chip").forEach(x=>x.classList.toggle("active", x===c));
-    renderGrid();
   }));
   document.getElementById("searchInput").addEventListener("input",(e)=>{
-    searchTerm = e.target.value.trim().toLowerCase();
-    visibleCount = 12;
-    renderGrid();
+    pendingSearchTerm = e.target.value.trim().toLowerCase();
   });
+  document.getElementById("searchInput").addEventListener("keydown",(e)=>{
+    if(e.key === "Enter") applyPendingFilters();
+  });
+  document.getElementById("applyFiltersBtn").addEventListener("click", applyPendingFilters);
 }
 function filteredProducts(){
   return products.filter(p=>{
@@ -3045,6 +3066,7 @@ function route(){
   window.scrollTo(0,0);
   if(v === "urunler"){
     activeCat = param || "all";
+    pendingCat = activeCat;
     document.querySelectorAll("#catFilterRow .chip").forEach(c=> c.classList.toggle("active", c.dataset.cat === activeCat));
     renderGrid();
   }
